@@ -127,3 +127,45 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+.Rproj.user
+
+# R related #
+#############
+*.Rhistory
+*.Rdata
+*.Ruserdata
+*.Rproj.user
+*.Rproj
+
+# R markdown & HTML related #
+#############################
+*.html
+*.nb.html
+
+# Mac OS related #
+##################
+.DS_Store
+
+# Other common files to exclude #
+################################
+*.log
+*.bak
+*.swp
+*.swo
+*~ 
+
+# If using packrat #
+####################
+/packrat/
+/packrat.bak/
+
+# If using renv #
+#################
+/renv/
+.renv.lock
+
+# If using bookdown #
+#####################
+/_book/
+
+
