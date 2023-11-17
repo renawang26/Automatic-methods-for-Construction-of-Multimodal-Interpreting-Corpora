@@ -143,9 +143,6 @@ pie <- ggplot(edit_ratio, aes(x = "", y = is_upd, fill = fct_inorder(Group.1))) 
 pie
 
 colnames(grouped_edit) <- c('conf_lv', 'is_upd', 'count', 'count.1')
-# gplot(words, aes(x="", y=value, fill=is_upd)) +
-#   geom_bar(stat="identity", width=1) +
-#   coord_polar("y", start=0)
 
 ft_conf_lv <- my_table_row_theme(res_conf_lv, "Table 1b. ASR Confidence Level Group", 9, 0, 'N/A') 
 autofit(ft_conf_lv)
@@ -210,10 +207,7 @@ index <- createDataPartition(words$is_upd_num, p = percent, list = FALSE)
   
 # Subset training & testset with index
 trainset <- words[index, c('is_upd_num', 'confidence')]
-#trainset[["is_upd_num"]] = trainset[["is_upd_num"]]
-
 testset <- words[-index, c('is_upd_num', 'confidence')]
-#testset[["is_upd"]] = testset[["is_upd_num"]]
 
 data <- list(
   trainset = trainset,
@@ -221,12 +215,9 @@ data <- list(
 )
 
 model <- glm(is_upd_num ~ confidence, data = data$trainset, family = binomial(link="logit"))
-#model <- lm(is_upd_num ~ confidence, data = data$trainset)
 summary(model)
 
 predicted <- predict(model,type="response", data$testset)
-#future <- as.data.frame(predicted)
-#final <- cbind(future,data$testset)
 
 
 # In order to optimize the model accuracy, we use the optimalCutoff function in the InformationValue suite to find the optimal probability cut-off point.The optimal probability tangent point was found to be the same as the preset 0.5.
@@ -250,22 +241,6 @@ Concordance(data$testset$is_upd_num, predicted)
 
 plotROC(actuals = data$testset$is_upd_num, predictedScores = predicted)
 
-
-#obs_p_logistic = data.frame(prob=predictions, obs=data$testset$is_upd)
-
-# confusion matrix
-#cm <- table(data$testset$is_upd, predicted, dnn=c("Actual Value", "Predicit Value")) 
-
-# ROC curve
-# logistic_roc <- roc(data$testset$is_upd, predictions)
-# 
-# plot(logistic_roc, print.auc=TRUE, auc.polygon=TRUE, grid=c(0.1, 0.2),grid.col=c("green", "red"), max.auc.polygon=TRUE,auc.polygon.col="skyblue", print.thres=TRUE,main='Logistic Regression ROC Curve')
-
-#plot(seq(0, 1, length=9444), sort(predictions),col='blue')
-
-#cm <- confusionMatrix(data$testset$prob, data$testset$is_upd)
-  
-
 ```
 In conclusion above measure index, the model predict capacity is good with the error rate 4.64%.
 
@@ -278,28 +253,6 @@ library(devtools)
 library(scales)
 library(ggplot2)
 library(NeuralNetTools)
-
-# nnetM <- nnet(formula = is_upd_num ~ confidence, linout = T, size = 3, decay = 0.001, maxit = 1000, trace = T, data = data$trainset)
-# 
-# nn1 <- nnet(as.factor(is_upd_num) ~ confidence, data = data$trainset, size = 40 , maxit = 500) 
-# # maxit: maximum number of iterations. Default 100.
-# # size: number of units in the hidden layer. Can be zero if there are skip-layer units.
-# 
-# # type只有"raw"=>prob, "class"=>0,1
-# nn1.predict <- predict(object = nn1, newdata = data$testset, type = "raw")
-# 
-# misClassError(actuals = data$testset$is_upd_num, predictedScores = nn1.predict)
-# 
-# plotnet(nn1, wts.only = F)
-# 
-# #nn.predict <- predict(nnetM, data$testset, type = 'class')
-# 
-# # maxit: maximum number of iterations. Default 100.
-# # size: number of units in the hidden layer. Can be zero if there are skip-layer units.
-#  
-# # type只有"raw"=>prob, "class"=>0,1
-#  
-# misClassError(actuals = data$testset$is_upd_num, predictedScores = nn1.predict)
 
 # SVM
 library(kernlab)
@@ -400,15 +353,6 @@ ft <- cv_res %>% flextable() %>%
     hline(i = nrow(cv_res), border = big_border, part = "body") %>%
     colformat_num(big.mark = ",", digits = 2, na_str = "N/A")
 
-# ft <- compose(ft, 
-#     j = "auc",
-#     value = as_paragraph(
-#       as_image(src = roc, width = .6, height = .6), 
-#       "", as_chunk(x = auc, fp_text_default(color = "#337ab7"),
-#                     format_fun = colformat_double(digits = 2) )
-#     )
-#   )
-
 autofit(ft)
 
 ```
@@ -435,10 +379,6 @@ model_poisson <- train(is_upd_num ~ confidence, data = dt,
                trControl = train_control, method = "glm",
                family=poisson(link = "log"))
 summary(model_poisson)
-# poisson
-
-# print cv scores
-
 
 ```
 
