@@ -1,9 +1,5 @@
 # Automatic-methods-for-Construction-of-Multimodal-Interpreting-Corpora
 
-    The Automatic Speech Recognition (ASR) (Sharp et al. 1997) (Santiago et al. 2017) is widely 
-used in many aspects and has accepted by publication. In this studying, we want to identify could 
-we use the ASR confidence score to predict the human post edit. Automatic speech recognition (ASR) systems 
-output a confidence score for each recognized word. The ASR confidence score is an estimate of how 
-likely the word is to be correct (Wessel et al. 2001), the ASR confidence score is from 0 to 1.
+Automatic Speech Recognition (ASR), as discussed in studies by Sharp et al. (1997) and Santiago et al. (2017), is a technology that has gained widespread usage and recognition in various fields, with its findings being accepted for publication. This study aims to explore the possibility of using the ASR confidence score as a predictor for human post-editing efforts. ASR systems assign a confidence score to each word they recognize, which reflects the probability of the word being correctly identified, as detailed by Wessel et al. (2001). These confidence scores range from 0 to 1.
 
-    This R script used to evaluate the post edit ratio and ASR confidence level with the logistic regression model.
+In this context, we have developed an R script designed to assess the relationship between the post-edit ratio and the ASR confidence level. This evaluation is conducted using a logistic regression model.
