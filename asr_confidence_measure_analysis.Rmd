@@ -51,7 +51,7 @@ library(reshape2)
 seed = as.numeric(format(Sys.time(), "%s"))
 set.seed(seed)
 
-words <- get_edit_words_similarity(TRUE, 'interpret') 
+words <- get_edit_words_similarity('interpret') 
 
 labels = seq(from = 0.05, to = 1, by = 0.1)
 words$conf_lv = cut(words$confidence, seq(from = 0, to = 1, by = 0.1))
