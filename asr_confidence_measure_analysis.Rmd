@@ -218,7 +218,6 @@ confid_sum_df <- rbind(confid_sum_df, data.frame(Min = confid_sum[['Min.']],
 
 ```
 
-
 ## Methods
 
 ### Logistic Regression
