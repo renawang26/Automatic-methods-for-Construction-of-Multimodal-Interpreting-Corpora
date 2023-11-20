@@ -1,15 +1,20 @@
 ---
-title: "ASR Confidence Level Analysis"
-author: ""
+title: "ASR Confidence Score Analysis"
+author: "Wang Xiao Man"
 date: "`r Sys.Date()`"
 output:
+  word_document:
+    toc: yes
+    toc_depth: '4'
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    latex_engine: xelatex
   html_document:
     toc: yes
     toc_depth: '4'
     df_print: paged
-  word_document:
-    toc: yes
-    toc_depth: '4'
+  #  css: style.css
   html_notebook:
     df_print: paged
     toc: yes
@@ -19,69 +24,107 @@ output:
     theme: cerulean
     code_folding: show
     highlight: textmate
-    css: style.css
-  pdf_document:
-    toc: yes
-    toc_depth: '4'
-    latex_engine: xelatex
 fontsize: 11pt
 link-citations: yes
+bibliography: C:/myap/PhD_Project/src/InterpretRator/paraverbal_analysis/reference.bib
 always_allow_html: yes
 params:
-  # paraverbal_file: C:/myap/PhD_Project/src/Speech/doc/paraverbal_symbol.xlsx
-  # db_path: C:/myap/PhD_project/data/repository/ta_repository.db
   table_format: pander
+  doc_path: 'C:/myap/PhD_Project/src/InterpretRator/doc'
 ---
 
-```{r data process, include=FALSE, message=TRUE, warning=FALSE}
+```{r global_options, include=FALSE}
 
-knitr::opts_chunk$set(echo = F, fig.width = 10, fig.height = 6)
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, fig.pos = 'h')
+
+```
+
+```{r data process, echo=FALSE, message=FALSE, warning=FALSE}
 
 source('./global.R')
+source('./function.R')
 
-library('gridExtra')
-library('ggpubr')
-library('dplyr')
-library('MASS')
-                     
-con <- DBI::dbConnect(RSQLite::SQLite(), DB_PATH)
+library(dplyr)
+library(tidyr)
+library(reshape2)
 
-language = 'zh'  # en|zh
-provider = 'ibm' # google|ibm
+seed = as.numeric(format(Sys.time(), "%s"))
+set.seed(seed)
 
-words_raw <- dplyr::filter(dbReadTable(con, 'pd_interpret_words'), lang==language & service_provider==provider)
-
-words_raw[is.na(words_raw)] <- 0 # replace NA to 0
-words <- subset(words_raw, SCORE > 0)
-
-words$is_upd <- factor(ifelse(words$word == words$edit_word, 'No', 'Yes'))
-words$is_upd_num <- ifelse(words$word == words$edit_word, 0, 1)
+words <- get_edit_words_similarity(TRUE, 'interpret') 
 
 labels = seq(from = 0.05, to = 1, by = 0.1)
 words$conf_lv = cut(words$confidence, seq(from = 0, to = 1, by = 0.1))
 words$conf_lv_num = as.numeric(cut(words$confidence, seq(from = 0, to = 1, by = 0.1), labels = labels, right = TRUE))
-#labels[as.numeric(words$conf_lv_num)]
 
-words$language = language
-words$service_provider = provider
+grouped_edit <- aggregate(words[c('conf_lv', 'is_upd_num')], by=list(words$conf_lv, words$is_upd_num), FUN=length)
 
-grouped_edit <- aggregate(words[c('conf_lv', 'is_upd')], by=list(words$conf_lv, words$is_upd), FUN=length)
+colnames(grouped_edit) <- c('conf_lv', 'is_upd_num', 'count', 'count.1')
 
-colnames(grouped_edit) <- c('conf_lv', 'is_upd', 'count', 'count.1')
+edit_count <- aggregate(words[c('interpret_file', 'conf_lv', 'is_upd_num')], by=list(words$interpret_file, words$conf_lv, words$is_upd), FUN=length)
+colnames(edit_count) <- c('interpret_file', 'conf_lv', 'is_upd_num', 'count', 'count.1', 'count.2')
 
-edit_count <- aggregate(words[c('interpret_file', 'conf_lv', 'is_upd')], by=list(words$interpret_file, words$conf_lv, words$is_upd), FUN=length)
-colnames(edit_count) <- c('interpret_file', 'conf_lv', 'is_upd', 'count', 'count.1', 'count.2')
-
-file_conf_lv_cnt <- words[c('interpret_file', 'conf_lv', 'conf_lv_num', 'is_upd', 'service_provider')] %>%
-    group_by(interpret_file, conf_lv, conf_lv_num, is_upd, service_provider) %>%
+file_conf_lv_cnt <- words[c('interpret_file', 'conf_lv', 'conf_lv_num', 'is_upd_num')] %>%
+    group_by(interpret_file, conf_lv, conf_lv_num, is_upd_num) %>%
     summarise(con_lv_count = n(), .groups = 'drop')
 
-result = dcast(file_conf_lv_cnt, conf_lv ~ is_upd, value.var="con_lv_count", fun.aggregate=sum)
+result = dcast(file_conf_lv_cnt, conf_lv ~ is_upd_num, value.var="con_lv_count", fun.aggregate=sum)
+colnames(result) <- c('conf_lv', 'No', 'Yes')
 res_rate <- result %>% mutate(rate = round(Yes/(Yes+No), 3), total = Yes+No)
 res_rate <- res_rate[, c(1, 3, 2, 5, 4)]
 res_rate <- res_rate %>% mutate(Percentage= round(total/sum(total)*100, 3))
 
-res_rate_long <- gather(res_rate, is_upd, count, No:Yes, factor_key = TRUE)
+file_result = dcast(file_conf_lv_cnt, interpret_file + conf_lv ~ is_upd_num, value.var="con_lv_count", fun.aggregate=sum)
+colnames(file_result) <- c('interpret_file', 'conf_lv', 'No', 'Yes')
+file_res_rate <- file_result %>% mutate(rate = round(Yes/(Yes+No), 3), total = Yes+No)
+
+file_conf_lv_rate <- file_res_rate[c('interpret_file', 'conf_lv', 'rate')] %>%
+    pivot_wider(names_from = c( 'conf_lv'), values_from = rate)
+
+file_conf_lv_count <- file_res_rate[c('interpret_file', 'conf_lv', 'total')] %>%
+    pivot_wider(names_from = c( 'conf_lv'), values_from = total)
+
+file_conf_lv_rate[is.na(file_conf_lv_rate)] <- 0
+file_conf_lv_count[is.na(file_conf_lv_count)] <- 0
+
+scores <- words %>% distinct(interpret_file, SCORE) %>% arrange(interpret_file, SCORE)
+
+df_file_conf_lv_rate <- merge(file_conf_lv_rate, scores, by = "interpret_file")
+df_file_conf_lv_count <- merge(file_conf_lv_count, scores, by = "interpret_file")
+
+```
+
+## Background
+
+The Automatic Speech Recognition (ASR) [@604839] [@santiago2017building] is widely used in many aspects and has accepted by publication. In this studying, we want to identify could we use the ASR confidence score to predict the human post edit. Automatic speech recognition (ASR) systems output a confidence score for each recognized word. The ASR confidence score is an estimate of how likely the word is to be correct [@wessel2001confidence], the ASR confidence score is from 0 to 1.
+
+## Data Description
+
+In this studying, we analysis 49 students interpret audio file and got total 31,483 words with confidence measure from Automatic Speech Recognition (ASR) system. To get the post edit data, we repeat listen the interpret audio; then corrected 1,488 words within total 31,483 words; the manual correct ratio are different between confidence score group from 56.7% to 1.1%, the overall edit ratio is 4.7% (figure 1a), the ASR confidence score and post edit ratio distribution status is show as figure 1b.
+
+```{r edit_pie_chart, fig.cap=c(""), fig.width=6, fig.height=6}
+
+library(ggrepel)
+library(forcats)
+library(scales)
+
+edit_ratio <- aggregate(words['is_upd_num'], by=list(words$is_upd_num), FUN=length)
+edit_ratio %>% arrange(desc(is_upd_num)) %>% mutate(prop=sprintf('%.1f%s', (is_upd_num/sum(is_upd_num))*100, '%')) -> edit_ratio
+edit_ratio[1, 1] = 'Correct transcription'
+edit_ratio[2, 1] = 'Incorrect transcription'
+
+ggplot(edit_ratio, aes(x = "", y = is_upd_num, fill = fct_inorder(Group.1))) +
+       geom_bar(width = 1, stat = "identity") + coord_polar("y", start = 0) +
+       geom_label_repel(aes(label = prop), size=4, show.legend=F, nudge_x=0.2, nudge_y=0.5, min.segment.length=0, box.padding=0.5, direction="y", hjust=1) +
+       guides(fill=guide_legend(title = "Post Edit")) +
+      scale_fill_manual(values = c("Incorrect transcription"="#DC143C", "Correct transcription" = "#69b3a2")) +
+      theme(panel.border=element_rect(colour="black", fill=NA, size=0.6)) +
+      ggtitle("Figure 1a. Post Edit Pie Chart") +
+      labs(y="", x = "Count")
+
+```
+
+```{r confidence_group_evel}
 
 res_conf_lv_tmp <- data.frame(t(res_rate[-1]))
 colnames(res_conf_lv_tmp) <- res_rate[, 1]
@@ -96,58 +139,38 @@ res_conf_lv[nrow(res_conf_lv) + 1, ] <- rate_str
 edit_rate_str = sprintf("%.1f%s", res_rate$rate * 100, '%')
 edit_rate_str[[length(edit_rate_str)+1]] = sprintf("%.1f%s", (as.numeric(res_conf_lv['Yes', 'Total']) / as.numeric(res_conf_lv['total', 'Total'])) * 100, '%')
 res_conf_lv[nrow(res_conf_lv) + 1, ] <- edit_rate_str
-rownames(res_conf_lv) <- c("Edit Count", "No Edit Count", "Total Count", "Ratio", "Edit Ratio")
 
-file_result = dcast(file_conf_lv_cnt, interpret_file + conf_lv ~ is_upd, value.var="con_lv_count", fun.aggregate=sum)
-file_res_rate <- file_result %>% mutate(rate = round(Yes/(Yes+No), 3), total = Yes+No)
+rowname <- c('Edit Count', 'No Edit Count', 'Total Count', 'Ratio', 'Edit Ratio')
+res_conf_lv <- cbind('Group' = rowname, res_conf_lv) 
 
-file_conf_lv_rate <- file_res_rate[c('interpret_file', 'conf_lv', 'rate')] %>%
-    pivot_wider(names_from = c( 'conf_lv'), values_from = rate)
+set_flextable_defaults(big.mark = " ", 
+  font.size = 10, theme_fun = theme_vanilla,
+  padding.bottom = 2, padding.top = 2, padding.left = 2, padding.right = 2,
+  background.color = "white")
 
-file_conf_lv_count <- file_res_rate[c('interpret_file', 'conf_lv', 'total')] %>%
-    pivot_wider(names_from = c( 'conf_lv'), values_from = total)
-
-file_conf_lv_rate[is.na(file_conf_lv_rate)] <- 0
-file_conf_lv_count[is.na(file_conf_lv_count)] <- 0
-
-scores <- words %>% distinct(interpret_file, SCORE, service_provider, language) %>% arrange(interpret_file, SCORE, service_provider, language)
-
-df_file_conf_lv_rate <- merge(file_conf_lv_rate, scores, by = "interpret_file")
-df_file_conf_lv_count <- merge(file_conf_lv_count, scores, by = "interpret_file")
+ft <- flextable(res_conf_lv) %>%
+  add_header_row(colwidths = c(1, 10, 1), values = c("", "Confidence Score Group", "")) %>%
+  bold(bold = TRUE, part = "header") %>%
+  fontsize(size = 9, part = "header") %>%
+  set_table_properties(width=0.9, layout="autofit") %>%
+  align(align = "center", part = "all") %>%
+  fontsize(size=7, part="body") %>%
+  set_caption(caption="Table 1b. ASR Confidence Score Group") %>%
+  border_remove() %>%
+ # border_outer(border = fp_border(color="black", width=1), part = "all") %>%
+  hline_top(border=fp_border(color="black", width = 2), part = "all") %>%
+  hline_bottom(border=fp_border(color="black", width = 1), part = "all") %>%
+  hline(i=nrow(res_conf_lv), border=fp_border(color="black", width=2), part="body") %>%
+  vline(j = c(1, 11), border = fp_border_default())
+ft
 
 ```
 
+```{r Confidence_distribute, fig.width=8, fig.height=8}
 
-## Data Description
+res_rate_long <- gather(res_rate, is_upd_num, count, No:Yes, factor_key = TRUE)
 
-In this studying, we analysis 49 students' interpret audio file and got total 31,483 Automatic Speech Recognition (ASR) words via IBM speech to text cloud service. We post edit 1,488 words within total 31,483 words; the overall edit ratio is 4.7% (figure 1a). The post edit was done by professional English PhD candidate by repeat listen the audio slice from the students' interpret audio. For represent the relationship of post edit and ASR confidence level, We separate the word level ASR confidence level to 10 group (0~1, (0,0.1]	(0.1,0.2]	(0.2,0.3]	(0.3,0.4]	(0.4,0.5]	(0.5,0.6]	(0.6,0.7]	(0.7,0.8]	(0.8,0.9]	(0.9,1]) (figure 1b).
-
-```{r words confidence analysis, message=FALSE, warning=FALSE}
-library(ggrepel)
-library(forcats)
-library(scales)
-
-edit_ratio <- aggregate(words['is_upd'], by=list(words$is_upd), FUN=length)
-
-edit_ratio %>%
-arrange(desc(is_upd)) %>%
-mutate(prop = sprintf('%.1f%s', (is_upd / sum(is_upd))*100, '%')) -> edit_ratio
-edit_ratio
-
-pie <- ggplot(edit_ratio, aes(x = "", y = is_upd, fill = fct_inorder(Group.1))) +
-       geom_bar(width = 1, stat = "identity") +
-       coord_polar("y", start = 0) +
-       geom_label_repel(aes(label = prop), size=5, show.legend = F, nudge_x = 1) +
-       guides(fill = guide_legend(title = "Post Edit")) +
-    scale_fill_manual(values = c("No" = "#69b3a2", "Yes" = "#DC143C"))
-pie
-
-colnames(grouped_edit) <- c('conf_lv', 'is_upd', 'count', 'count.1')
-
-ft_conf_lv <- my_table_row_theme(res_conf_lv, "Table 1b. ASR Confidence Level Group", 9, 0, 'N/A') 
-autofit(ft_conf_lv)
-
-p <- ggplot(res_rate_long, aes(fill= is_upd, y=count, x=conf_lv)) +
+ggplot(res_rate_long, aes(fill= is_upd_num, y=count, x=conf_lv)) +
     geom_bar(position="dodge", stat="identity") +
     geom_line(aes(x=conf_lv, y=rate * max(total)), colour="#008080", size=0.6, group = 1) +
     geom_point(aes(x=conf_lv, y=rate*max(total)), size=0.8) + 
@@ -156,175 +179,164 @@ p <- ggplot(res_rate_long, aes(fill= is_upd, y=count, x=conf_lv)) +
     scale_y_continuous(sec.axis = sec_axis(~./max(res_rate_long$total), label=scales::percent)) +
     labs(tag='Edit Ratio') +
     theme(legend.box.margin=margin(l=20), plot.tag=element_text(angle=-90),
-          plot.tag.position=c(1, 0.6), text = element_text(size = 8)) +
+          plot.tag.position=c(1, 0.6), text = element_text(size = 9)) +
     guides(fill = guide_legend(title = "Post Edit")) +
-    labs(title="Post Edit Rate", y="Count", x = "Confidence Level Group") +
+    labs(y="Count", x = "Confidence Score Group") +
     scale_fill_manual(values = c("No" = "#69b3a2", "Yes" = "#DC143C")) + 
-    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, colour="black"),
-          axis.text.y = element_text(size=8, colour="black"),
+    theme(axis.text.x = element_text(size=9, angle=0, vjust=1, hjust=0.5, colour="black"),
+          axis.text.y = element_text(size=9, colour="black"),
           panel.border = element_rect(colour = "black", fill=NA, size=0.6),
-          legend.position = "bottom")
-p
-
-ggplot(data=words,aes(x=conf_lv_num)) + 
-  geom_histogram(binwidth=1,fill="#69b3a2", 
-                 color="#e9ecef", alpha=0.9)+
-  theme_bw()+
-  labs(x="",y="")
-
-hist(words$confidence,freq = T)
+          legend.position = "bottom") +
+    ggtitle("Figure 1b. ASR Confidence Score and Post Edit Rate")
 
 ```
-
-## Data Analysis
-
-### Simple Logistic Regression Analysis
-
-Logistic regression was widely used after 1967 in all walks of life, data exploration or knowledge exploration is more frequently used as one of the most important tools for data analysis, especially when the classification results in only two or a few categories. Logistic regression has become almost the most applicable analytic method in many fields. Logistic regression is basically similar to general linear regression, but the result of the depended variable (explained variable) of the logistic regression model is a binary variable; the result has only two possibilities, such as: 0 or 1, yes or no, true or false, which is a kind of binary application. The logistic regression is often used to establish a prediction model of a binary variable; otherwise, we could also calculate the probability of an event happening due to the category data is generally between 0 and 1.
-Because the post edit is a binomial identification, so in this studying we use the Binary Logistic Regression Model to create the post edit prediction model via ASR confidence level to improve the interpret quality estimation accuracy. In our studying, we only analysis one independent variable (confidence), so we use simple logistic regression. In the model, we use the ASR confidence level as the independent variable and is post edit as the dependent variable to build up the logistic regression model.
-We separate the 30% words (9,445 words) as test data and 70% words as training data and do cross validation use k-fold cross-validation to build up the logistic regression model.
+### Confidence Descriptive Statistics 
 
 
-```{r regression analysis, message=FALSE, warning=FALSE}
+```{r}
 
-library('e1071')
-library('lattice')
-library('caret')
-library('pROC')
-library(moments)
-library(MASS)
+confid_sum <- summary(words$confidence)
 
-# result = dcast(file_conf_lv_cnt, conf_lv ~ is_upd, value.var="con_lv_count", fun.aggregate=sum)
-# res_rate <- result %>% mutate(rate = round(Yes/(Yes+No), 3), total = Yes+No)
-# res_rate <- res_rate[, c(1, 3, 2, 5, 4)]
-# res_rate <- res_rate %>% mutate(Percentage= round(total/sum(total)*100, 3))
+confid_sum
 
-seed = as.numeric(format(Sys.time(), "%s"))
-set.seed(seed)
-percent = 0.7
-  
-index <- createDataPartition(words$is_upd_num, p = percent, list = FALSE)
-  
-# Subset training & testset with index
-trainset <- words[index, c('is_upd_num', 'confidence')]
-testset <- words[-index, c('is_upd_num', 'confidence')]
-
-data <- list(
-  trainset = trainset,
-  testset = testset
+confid_sum_df <- data.frame(
+  Min = numeric(0),
+  First_Qu = numeric(0),
+  Median = numeric(0),
+  Mean = numeric(0),
+  Third_Qu = numeric(0),
+  Max = numeric(0)
 )
 
-model <- glm(is_upd_num ~ confidence, data = data$trainset, family = binomial(link="logit"))
-summary(model)
+confid_sum_df <- rbind(confid_sum_df, data.frame(Min = confid_sum[['Min.']],
+  First_Qu = confid_sum[['1st Qu.']],
+  Median = confid_sum[['Median']],
+  Mean =  confid_sum[['Mean']],
+  Third_Qu =  confid_sum[['3rd Qu.']],
+  Max =  confid_sum[['Max.']]))
 
-predicted <- predict(model,type="response", data$testset)
-
-
-# In order to optimize the model accuracy, we use the optimalCutoff function in the InformationValue suite to find the optimal probability cut-off point.The optimal probability tangent point was found to be the same as the preset 0.5.
-library(InformationValue)
-optCutOff <- optimalCutoff(actuals = data$testset$is_upd_num, predictedScores = predicted)[1]
-optCutOff
-
-# 產生Confusion Matrix
-cm <- confusionMatrix(actuals = data$testset$is_upd_num, predictedScores = predicted,threshold = optCutOff)
-
-# 預測錯誤率(misClassification Rate)
-misClassError(actuals = data$testset$is_upd_num, predictedScores = predicted,threshold = optCutOff)
-
-# 又稱Recall(捕捉率），即真實為1，且被正確預測為1的比例。（通常與Precision精準度成反比）
-precision(actuals = data$testset$is_upd_num, predictedScores = predicted,threshold = optCutOff)
-
-# 即真實為0，且被正確預測為0的比例。
-specificity(data$testset$is_upd_num, predicted, threshold = optCutOff)
-
-Concordance(data$testset$is_upd_num, predicted)
-
-plotROC(actuals = data$testset$is_upd_num, predictedScores = predicted)
-
-```
-In conclusion above measure index, the model predict capacity is good with the error rate 4.64%.
-
-## Model comparsion (v.s. Machine Learning Methods)
-``` {r }
-library(DMwR2)
-library(nnet)
-library(reshape)
-library(devtools)
-library(scales)
-library(ggplot2)
-library(NeuralNetTools)
-
-# SVM
-library(kernlab)
-svm <- ksvm(as.factor(is_upd_num) ~ confidence, data = data$trainset)
-
-svm.pred.prob <- predict(svm, data$testset, type = "decision")
-svm.pred <- predict(svm, data$testset, type = "response")
-
-tbsvm <- table(svm.pred, data$testset$is_upd_num)
-tbsvm
-
-# missclassification rate
-(tbsvm['1','0'] + tbsvm['0','1']) / sum(tbsvm)
 
 ```
 
-## Logistic Regression with cross validation
 
-``` {r cross validation manual}
+## Methods
+
+### Logistic Regression
+
+Regression methods have widely used in any data analysis concerned with describing the relationship between a response variable and one or more explanatory variables and logistic regression was widely used in binary or dichotomous [@hosmer2013applied]. Especially when the classification results in only two or a few categories and the data is non-normal distribution. Logistic regression has become almost the most applicable analytic method in many fields. The logistic regression is often used to establish a prediction model of a binary variable; otherwise, we could also calculate the probability of an event happening due to the category data is generally between 0 and 1. Because the post edit is a binomial (0 or 1), so in this studying we use the Binary Logistic Regression Model to create the post edit prediction model with independent variable ASR confidence score. Because we only analysis one independent variable ASR confidence score [@jiang2005confidence], so we use simple logistic regression to build up the predict model.
+
+### Cross Validation
+
+In order to reduce the risk of overfitting or selection bias, we use K-Fold Cross Validation [@stone1974cross] approach. The data is partitioned into 10 equal size subsets with each set used in turn for testing while the other k − 1 subsets are used as training data.
+
+### Data balance
+
+For imbalance data, one consequence of this is that the performance is generally very biased against the class with the smallest frequencies. For example, if the data have a majority of samples belonging to the first class and very few in the second class, most predictive models will maximize accuracy by predicting everything to be the first class. As result there's usually great sensitivity but poor specificity [@kuhn2013applied]. Because in our case, the non-post edit ratio is over 95.4%, so the predict result will mostly non-post edit, we use down sampling to balance the non edit ratio similar to edit ratio.
+
+### Metrics
+
+There are numerous metrics used in evaluating the accuracy of predictive model. In this studying, we use AUC, or area under the receiver operating characteristic (ROC) curve and confusion matrix as metrics. The ROC curve is a plot of the true positive rate against the false positive rate. The AUC is the area under this curve and is used as a single measurement of classifier performance. This definition is typically for binary classification tasks [@hemphill2014feature].
+
+-   Confusion Matrix [@stehman1997selecting] [@powers2020evaluation]
+    -   Predict Error Rate: ratio of predict 1 actual is 0 and predict 0 and actual is 1.
+    -   Precision: ratio of predict 1 and actual is 1.
+    -   Recall(aka sensitivity): ratio of actual is 1 and predict as 1; reserve to Precision.
+    -   Specificity: ratio of actual is 0 and predict is 0.
+-   ROC/AUC (Receiver Operation Characteristic/Area Under Curve) [@zweig1993receiver] [@fawcett2006introduction]: ROC curve is a graph showing the performance of a classification model at all classification thresholds. This curve plots two parameters of "True Positive Rate (TRP)" and "False Positive Rate (FPR)". AREA UNDER THE ROC CURVE (AUC) is an effective way to summarize the overall diagnostic accuracy of the test. It takes values from 0 to 1, where a value of 0 indicates a perfectly inaccurate test and a value of 1 reflects a perfectly accurate test [@mandrekar2010receiver]. AUC can be computed using the trapezoidal rule. In general, an AUC of 0.5 suggests no discrimination (i.e., ability to diagnose patients with and without the disease or condition based on the test), 0.7 to 0.8 is considered acceptable, 0.8 to 0.9 is considered excellent, and more than 0.9 is considered outstanding [@hosmer2013applied].
+
+```{r flow chart, fig.width=8, fig.height=8}
+
+knitr::include_graphics(file.path(params$doc_path, "ASR-Confidence.png"))
+
+```
+
+## Result
+
+This study is evaluating the post edit ratio and ASR confidence level use the logistic regression model. Therefore conclusions about the 10 times K-Fold cross validation average metrics of predict error rate is 4.64%, precision is 0.61, sensitivity is 0.52, specificity is 0.998 and AUC is 0.853; the AUC is between 0.8 to 0.9 is considered excellent. The simple logistic regression model has good predict for ASR confidence score and post edit.
+
+```{r cross_validation, message=FALSE, warning=FALSE}
 
 library(pROC)
+library(ggplot2)
+library(cowplot)
 library(InformationValue)
+library(broom)
+library(gt)
+library(caret)
 
 #Randomly shuffle the data
-seed = as.numeric(format(Sys.time(), "%s"))
-set.seed(seed)
+dt <- words[, c('confidence', 'similarity', 'is_upd_num')]
 
-words$is_upd_num <- ifelse(words$word == words$edit_word, 0, 1)
-dt <- words[, c('is_upd_num', 'confidence')]
+all_possible_levels <- c('0.11', '0.23', '0.24', '0.25', '0.27', '0.28', '0.29', '0.3', '0.31', '0.32', '0.33', '0.34', '0.35', '0.36', '0.37', '0.38', '0.39', '0.4', '0.41', '0.42', '0.43', '0.44', '0.45', '0.46', '0.47', '0.48', '0.49', '0.51', '0.55', '0.57', '0.58', '0.59', '0.6', '0.61', '0.62', '0.63', '0.64', '0.65', '0.66', '0.69', '0.7', '0.72', '0.75', '0.76', '0.77', '0.78', '0.8', '0.81', '0.82', '0.85', '0.96')
 
+#dt$similarity <- factor(dt$similarity, levels = all_possible_levels)
+
+#dt$similarity <- as.numeric(as.character(dt$similarity))
+
+dt$is_upd_num <- factor(dt$is_upd_num, levels=c(0, 1))
 dt<-dt[sample(nrow(dt)),]
+
+#lapply(dt[sapply(dt, is.factor)], levels)
 
 #Create 10 equally size folds
 folds <- cut(seq(1, nrow(dt)), breaks=10, labels=FALSE)
 
 #Perform 10 fold cross validation
+pvalue_val <- c()
 misClassError_val <- c()
 precision_val <-c()
+sensitivity_val <- c()
 specificity_val <- c()
 auc_val <- c()
 concordance_val <- c()
 discordance_val <- c()
 tied_val <- c()
 pairs_val <- c()
+optCutOff_val <- c()
+rocobj_val <- c()
+f1_score_val <- c()
+
+library(caret)
+'%ni%' <- Negate('%in%')  # define 'not in' func
+options(scipen=999)  # prevents printing scientific notations.
 
 for(i in 1:10){
-    #Segement your data by fold using the which() function 
-    testIndexes <- which(folds==i,arr.ind=TRUE)
+    testIndexes <- which(folds==i, arr.ind=TRUE)
     testData <- dt[testIndexes, ]
     trainData <- dt[-testIndexes, ]
-    #Use test and train data partitions however you desire...
-    model <- glm(is_upd_num ~ confidence, data=trainData, family=binomial(link="logit"))
-    #model <- lm(is_upd_num ~ confidence, data = data$trainset)
-    summary(model)
+   
+    down_train <- downSample(x=trainData[, colnames(trainData) %ni% "is_upd_num"], y=trainData$is_upd_num)
+    colnames(down_train) = c('confidence', 'similarity', 'is_upd_num')
     
-    predicted <- predict(model, type="response", testData)
     
-    optCutOff <- optimalCutoff(actuals = testData$is_upd_num, predictedScores = predicted)[1]
-    optCutOff
+
+    #model <- glm(is_upd_num ~ confidence, data=trainData, family=binomial(link="logit"))
+    model <- glm(is_upd_num ~  confidence, data=down_train, family=binomial(link="logit"))
+   # summary(model)
     
-    # 產生Confusion Matrix
-    cm <- confusionMatrix(actuals = testData$is_upd_num, predictedScores = predicted, threshold = optCutOff)
+    pvalue_val[[i]] <- broom::tidy(model)$p.value[2]
     
-    # 預測錯誤率(misClassification Rate)
+    predicted <- predict(model, type="response", newdata = testData)
+     
+    optCutOff <- optimalCutoff(actuals = testData$is_upd_num, predictedScores = predicted, optimiseFor = "Both")[1] # Ones, Zeros, Both, misclasserror (default)
+    optCutOff_val[[i]] <- optCutOff
+    
+    # Create Confusion Matrix
+    cm <- InformationValue::confusionMatrix(actuals = testData$is_upd_num, predictedScores = predicted, threshold=optCutOff)
+    
+    # Predict error rate (misClassification Rate)
     misClassError_val[[i]] <- misClassError(actuals = testData$is_upd_num, predictedScores = predicted, threshold = optCutOff)
     
-    # 又稱Recall(捕捉率），即真實為1，且被正確預測為1的比例。（通常與Precision精準度成反比）
-    precision_val[[i]] <- precision(actuals = testData$is_upd_num, predictedScores = predicted, threshold = optCutOff)
+    # Precision, ratio of predict 1 and real is 1.
+    precision_val[[i]] <- InformationValue::precision(actuals = testData$is_upd_num, predictedScores = predicted, threshold = optCutOff)
+   # precision_val[[i]] <- precision(data=predicted, reference=testData$is_upd_num, CutOff)
     
-    # 即真實為0，且被正確預測為0的比例。
-    specificity_val[[i]] <- specificity(testData$is_upd_num, predicted, threshold = optCutOff)
-    print(specificity_val)
+    # Recall(aka sensitivity) is defined as the proportion of relevant results out of the number of samples which were actually relevant. (ratio of reality is 1 and predict is 1, reverse to Precision)
+    sensitivity_val[[i]] <- InformationValue::sensitivity(testData$is_upd_num, predicted, threshold = optCutOff)
+    
+    # ratio of real is 0 and predict is 0.
+    specificity_val[[i]] <- InformationValue::specificity(testData$is_upd_num, predicted, threshold = optCutOff)
+    f1_score_val[[i]] <- 2*(precision_val[[i]]*sensitivity_val[[i]])/(precision_val[[i]]+sensitivity_val[[i]])
     
     con_val <- Concordance(testData$is_upd_num, predicted)
     
@@ -335,86 +347,42 @@ for(i in 1:10){
     
     auc_val[[i]] <- as.numeric(roc(testData$is_upd_num, predicted)$auc[[1]])
     
-    plotROC(actuals = testData$is_upd_num, predictedScores = predicted)
-    
-  #  ggsave(sprintf("./img/%d_roc.png", i))
+    rocobj_val[[i]] <- roc(testData$is_upd_num, predicted)
 }
 
-cv_res <- data.frame(No=c(1:10), misClassError=unlist(misClassError_val), precision=unlist(precision_val), specificity=unlist(specificity_val), auc=unlist(auc_val))
-cv_res <- mutate(cv_res, roc = file.path("./img", sprintf("%d_roc.png", No)))
+cv_res <- data.frame(No=c(1:10), cutOff = unlist(optCutOff_val), misClassError=sprintf("%.2f%s", as.numeric(unlist(misClassError_val)), '%'), precision=unlist(precision_val), sensitivity=unlist(sensitivity_val), specificity=unlist(specificity_val), auc=unlist(auc_val), pvalue=formatC(unlist(pvalue_val),format="e"))
 
-ft <- cv_res %>% flextable() %>%
-    set_table_properties(width = 1, layout = "autofit") %>%
-    fontsize(size = 9, part = "all") %>%
-    set_caption(caption = "Table 1c. Logistic Regression Cross Validation") %>%
-    border_remove() %>%
-    hline_top(border = big_border, part = "all") %>%
-    hline_bottom(border = small_border, part = "all") %>%
-    hline(i = nrow(cv_res), border = big_border, part = "body") %>%
-    colformat_num(big.mark = ",", digits = 2, na_str = "N/A")
+std_border = officer::fp_border(color="black", width = 1)
 
+#cv_res <- cv_res %>% bind_rows(summarize_if(., is.numeric, mean, na.rm = TRUE))
+
+cv_res[c(2, 4:7)] <- format(cv_res[c(2, 4:7)], digits = 3)
+cv_res[c(1)] <- format(cv_res[c(1)], digits = 1)
+
+
+ft <- my_theme(cv_res, "Table 1c. Logistic Regression Cross Validation", 1, 9) %>%
+    hline(i = 10, border = std_border) %>%
+    set_header_labels(values = list(cutOff = "Cut Off", misClassError = "Predict Error Rate",
+                    precision = "Precision", sensitivity = "Sensitivity",
+                    specificity = "Specificity", auc = "AUC", pvalue="P-Value"))
 autofit(ft)
 
 ```
 
-``` {r cross validation k-flod}
+```{r roc, fig.width=8, fig.height=6}
 
-library(caret)
-
-seed = as.numeric(format(Sys.time(), "%s"))
-set.seed(seed)
-words$is_upd_num <- ifelse(words$word == words$edit_word, 1, 2)
-dt <- words[, c('is_upd_num', 'confidence')]
-
-# define training control
-train_control <- trainControl(method = "cv", number = 10, savePred=T)
-
-# train the model on training set
-model_binomial <- train(as.factor(is_upd_num) ~ confidence, data = dt,
-               trControl = train_control, method = "glm",
-               family=binomial())
-summary(model_binomial)
-
-model_poisson <- train(is_upd_num ~ confidence, data = dt,
-               trControl = train_control, method = "glm",
-               family=poisson(link = "log"))
-summary(model_poisson)
+ggroc(rocobj_val, aes=c("color"), legacy.axes = TRUE) +
+  labs(x = "False Positive Rate (1 - Specificity)", y = "True Positive Rate (Sensitivity)") + 
+  geom_line(size=0.8) +
+  geom_abline() +
+  ggtitle("Logistic Regression Cross Validation ROC Curve") +
+  annotate("text", x=0.8, y=0.5, color='darkgreen', size=6, label= sprintf("Max ROC: %.2f\nMin ROC: %.2f", max(unlist(auc_val)), min(unlist(auc_val)))) +
+  annotate("text", angle=38, x=0.5, y=0.55, color='brown', size=6, label='Random Classifier') +
+  theme(axis.text.x = element_text(size=10, colour="black"),
+          axis.text.y = element_text(size=10, colour="black"),
+          panel.border = element_rect(colour = "black", fill=NA, size=0.6)) +
+  scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))
 
 ```
 
-### Machine Learning SVM
-``` {r SVM}
-
-library(kernlab)
-seed = as.numeric(format(Sys.time(), "%s"))
-set.seed(seed)
-percent = 0.7
-  
-index <- createDataPartition(words$is_upd_num, p = percent, list = FALSE)
-  
-# Subset training & testset with index
-trainData <- words[index, c('is_upd_num', 'confidence')]
-testData <- words[-index, c('is_upd_num', 'confidence')]
-
-svm <- ksvm(as.factor(is_upd_num) ~ confidence, data = trainData)
-
-library(e1071)
-
-svm.pred.prob <- predict(svm, testData, type = "decision")
-svm.pred <- predict(svm, testData, type = "response")
-
-tbsvm <- table(svm.pred, testData$is_upd_num)
-tbsvm
-
-# missclassification rate
-(tbsvm['1','0'] + tbsvm['0','1']) / sum(tbsvm)
-
-```
-
-``` {r k-flod cross validation}
-library(caret)
-
-tc <- trainControl("cv", 10, savePred=T)
-(fit <- train(as.factor(is_upd_num)~confidence, data=words,method="glm", trControl=tc, family=binomial(link="logit")))
-
-```
+## References
