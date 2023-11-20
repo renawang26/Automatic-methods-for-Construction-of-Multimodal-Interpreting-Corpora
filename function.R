@@ -3,29 +3,11 @@ library('sqldf')
 source('./global.R')
 
 get_root_path <- function() {
-    root_path = ''
-    if(Sys.info()['sysname'] == 'Windows') {
-        root_path = 'C:/myap/PhD_project/src/InterpretRator'
-    } else {
-        root_path = '/Users/renawang/PhD_project/src/InterpretRator'
-    }
-    return(root_path)
+    return('C:/myap/PhD_project/src/InterpretRator')
 }
 
-get_db_path <- function(interpret_type) {
-    db_path = ''
-    if(interpret_type == 'simultaneous_interpretation') {
-        db_path = file.path(get_root_path(), 'data', 'repository', 'si_repository.db')
-    } else if (interpret_type == 'interpret') {
-        db_path = file.path(get_root_path(), 'data', 'repository', 'in_repository.db')
-    } else if (interpret_type == 'interpret_teacher') {
-        db_path = file.path(get_root_path(), 'data', 'repository', 'teacher_repository.db')
-    } else if (interpret_type == 'corpus') {
-        db_path = file.path(get_root_path(), 'data', 'repository', 'corpus.db')
-    } else {
-        print(sprintf('%s is not supported, return empty', interpret_type))
-    }
-    return(db_path)
+get_db_path <- function() {
+    return(file.path(get_root_path(), 'data', 'repository', 'in_repository.db'))
 }
 
 get_edit_words <- function(lang, service_provider, has_score, interpret_type) {
@@ -63,54 +45,6 @@ get_edit_words_similarity <- function(has_score, interpret_type) {
     DBI::dbDisconnect(con)
     
     return(words)
-}
-
-get_transquest_data <- function(interpret_type) {
-    
-    con <- DBI::dbConnect(RSQLite::SQLite(), get_db_path(interpret_type))
-    # get transquest predict DA and HTER data
-    sql = "SELECT pd_tq.subject, pd_tq.interpret_file AS interpret_file, pd_tq.sent_en_len, pd_tq.sent_zh_len, pd_tq.sent_en, pd_tq.sent_zh, pd_tq.sent_mono_da, 
-            pd_tq.sent_siamese_da, pd_tq.sent_mono_hter, pd_score.lang, pd_score.service_provider, pd_score.SCORE AS score
-             FROM pd_transquest_1106 pd_tq, pd_interpret_score pd_score
-             WHERE pd_tq.interpret_file = pd_score.interpret_file
-             ORDER BY interpret_file ASC"
-    
-    data = DBI::dbGetQuery(con, sql)
-
-    DBI::dbDisconnect(con)
-    
-    return(data)
-}
-
-get_delivery_data <- function(interpret_type) {
-    
-    con <- DBI::dbConnect(RSQLite::SQLite(), get_db_path(interpret_type))
-    
-    if(interpret_type == 'interpret') {
-        delivery <- dplyr::filter(dbReadTable(con, 'pd_lexical_min'))
-    } else if(interpret_type == 'interpret_teacher') {
-        # get paraverbal and lexical attributes
-        sql_lexical_attrs = "SELECT paraverbal.interpret_file, NUP, NRLUP, NPLUP, 
-                  source_lex_density AS LD, source_avg_sent_wc AS ASL
-                  FROM pd_interpret_paraverbal paraverbal, pd_lexical lexical 
-                  where paraverbal.subject LIKE '%Consec%'
-                  and paraverbal.interpret_file = lexical.file_name
-                  order by paraverbal.interpret_file ASC"
-        
-        lexical_attrs = DBI::dbGetQuery(con, sql_lexical_attrs)
-        
-        # get speed
-        sql_speed = "SELECT interpret_file, ROUND((count(*) / (max(speak_end_time) - min(speak_start_time))), 1) AS DR
-                    FROM pd_interpret_words GROUP BY interpret_file"
-        
-        speed = DBI::dbGetQuery(con, sql_speed)
-        
-        delivery = merge(lexical_attrs, speed, by="interpret_file")
-    }
-    
-    DBI::dbDisconnect(con)
-    
-    return(delivery)
 }
 
 get_pvalue <- function(model_sum) {
@@ -155,45 +89,6 @@ get_interpret_files <- function(interpret_type) {
                     FROM interpret
                     WHERE service_provider = 'ibm'
                     ORDER BY id ASC "
-    
-    data = DBI::dbGetQuery(con, sql)
-    
-    DBI::dbDisconnect(con)
-    
-    return(data)
-}
-
-get_speech_data <- function(interpret_type, interpret_file, service_provider) {
- 
-    con <- DBI::dbConnect(RSQLite::SQLite(), get_db_path(interpret_type), encoding = 'UTF-8')
-    # get Cross-Lingual Similarity data
-    sql = sprintf("SELECT interpret_id, interpret_file, lang, speech, sentence_seq_no, word_seq_no, word, interpret_duration, speak_start_timestamp 
-                    FROM pd_interpret_words
-                    WHERE interpret_file = '%s' AND service_provider = '%s'
-                    ORDER BY interpret_id, speak_start_timestamp ASC ", 
-                  interpret_file, service_provider)
-  #  print(sql)
-    
-    data = DBI::dbGetQuery(con, sql)
-    
-    DBI::dbDisconnect(con)
-    
-    return(data)
-}
-
-get_interpret_qe_data <- function(interpret_type) {
-    
-    con <- DBI::dbConnect(RSQLite::SQLite(), get_db_path(interpret_type), encoding = 'UTF-8')
-    # get Cross-Lingual Similarity data
-    sql = sprintf("SELECT psa.interpret_file, psa.sent_id, psa.source, psa.target, AVG(psa.assessment) AS score, pst.sent_mono_da, pst.sent_siamese_da, pst.sent_mono_hter, pss.sim
-                    FROM pd_sentence_assessment psa
-                    LEFT JOIN pd_sentence_tq pst
-                    ON psa.interpret_file = pst.interpret_file
-                    AND psa.sent_id = pst.sent_id
-                    LEFT JOIN pd_sentence_similarity pss 
-                    ON psa.interpret_file = pss.interpret_file
-                    AND psa.sent_id = pss.sent_id
-                    GROUP BY psa.interpret_file, psa.sent_id ")
     
     data = DBI::dbGetQuery(con, sql)
     
