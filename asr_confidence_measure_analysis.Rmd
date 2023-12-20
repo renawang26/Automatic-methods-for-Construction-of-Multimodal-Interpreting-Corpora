@@ -1,6 +1,5 @@
 ---
 title: "ASR Confidence Score Analysis"
-author: "Wang Xiao Man"
 date: "`r Sys.Date()`"
 output:
   word_document:
@@ -26,11 +25,11 @@ output:
     highlight: textmate
 fontsize: 11pt
 link-citations: yes
-bibliography: C:/myap/PhD_Project/src/InterpretRator/paraverbal_analysis/reference.bib
+bibliography: 'your own bibliography path'  # change to your own bibliography path
 always_allow_html: yes
 params:
   table_format: pander
-  doc_path: 'C:/myap/PhD_Project/src/InterpretRator/doc'
+  doc_path: 'your own document path' # change to your own document path
 ---
 
 ```{r global_options, include=FALSE}
@@ -51,7 +50,7 @@ library(reshape2)
 seed = as.numeric(format(Sys.time(), "%s"))
 set.seed(seed)
 
-words <- get_edit_words_similarity('interpret') 
+words <- get_edit_words_similarity() 
 
 labels = seq(from = 0.05, to = 1, by = 0.1)
 words$conf_lv = cut(words$confidence, seq(from = 0, to = 1, by = 0.1))
@@ -214,7 +213,6 @@ confid_sum_df <- rbind(confid_sum_df, data.frame(Min = confid_sum[['Min.']],
   Mean =  confid_sum[['Mean']],
   Third_Qu =  confid_sum[['3rd Qu.']],
   Max =  confid_sum[['Max.']]))
-
 
 ```
 
