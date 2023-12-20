@@ -8,7 +8,7 @@ library(RSQLite)
 library(ggplot2)
 library(gridExtra)
 
-ROOT_PATH = 'C:/myap/PhD_project/src/InterpretRator'
+ROOT_PATH = 'your own path' # change to your own path
 
 big_border = fp_border(color="black", width = 2)
 small_border = fp_border(color="black", width = 1)
